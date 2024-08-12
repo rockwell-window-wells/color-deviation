@@ -9,8 +9,9 @@ import numpy as np
 import pandas as pd
 import cv2
 import matplotlib.pyplot as plt
-from skimage.color import deltaE_cie76
+from skimage.color import deltaE_cie76, rgb2lab
 from scipy.fft import fft2, ifft2, fftshift
+import skimage.restoration as restoration
 
 #%% Methods
 def calculate_deltaE(lab_image, reference_color: tuple):
@@ -49,25 +50,52 @@ def bgr_to_lab(bgr_image):
     lab_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2Lab)
     return lab_image
 
+# def bgr_array_to_lab(bgr_array):
+#     # Convert the BGR array to float32 and scale it to [0, 1]
+#     bgr_array = np.float32(bgr_array) / 255.0
+#     # Reshape to a single row image for conversion
+#     bgr_image = bgr_array.reshape(1, -1, 3)
+#     # Convert to Lab color space
+#     lab_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2Lab)
+#     # Reshape back to the original array shape
+#     lab_array = lab_image.reshape(-1, 3)
+#     return lab_array
+
 def bgr_array_to_lab(bgr_array):
     # Convert the BGR array to float32 and scale it to [0, 1]
     bgr_array = np.float32(bgr_array) / 255.0
-    # Reshape to a single row image for conversion
-    bgr_image = bgr_array.reshape(1, -1, 3)
-    # Convert to Lab color space
-    lab_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2Lab)
-    # Reshape back to the original array shape
-    lab_array = lab_image.reshape(-1, 3)
-    return lab_array
+    
+    # Convert to Lab color space without reshaping
+    lab_image = cv2.cvtColor(bgr_array, cv2.COLOR_BGR2Lab)
+    
+    return lab_image
 
-def calculate_deltaE_lab_array(lab_array):
-    m = lab_array.shape[0]
-    delta_e_matrix = np.zeros((m, m))
-    for i in range(m):
-        for j in range(i, m):
-            delta_e = deltaE_cie76(lab_array[i], lab_array[j])
-            delta_e_matrix[i, j] = delta_e
-            delta_e_matrix[j, i] = delta_e  # Symmetric matrix
+# def calculate_deltaE_lab_array(lab_array):
+#     m = lab_array.shape[0]
+#     delta_e_matrix = np.zeros((m, m))
+#     for i in range(m):
+#         for j in range(i, m):
+#             delta_e = deltaE_cie76(lab_array[i], lab_array[j])
+#             delta_e_matrix[i, j] = delta_e
+#             delta_e_matrix[j, i] = delta_e  # Symmetric matrix
+#     return delta_e_matrix
+
+def calculate_deltaE_lab_array(lab_array, reference_lab_color):
+    # lab_array should have the shape (height, width, 3)
+    height, width, _ = lab_array.shape
+    
+    # Reshape lab_array to (height*width, 3) for vectorized computation
+    reshaped_lab = lab_array.reshape(-1, 3)
+    
+    # Create an array for the reference color with the same shape as reshaped_lab
+    reference_lab_array = np.tile(reference_lab_color, (reshaped_lab.shape[0], 1))
+    
+    # Calculate the Delta E values for each pixel
+    delta_e_array = deltaE_cie76(reshaped_lab, reference_lab_array)
+    
+    # Reshape the delta_e_array back to the original image's height and width
+    delta_e_matrix = delta_e_array.reshape(height, width)
+    
     return delta_e_matrix
 
 def resize_image(image):
@@ -144,25 +172,98 @@ def power_spectrum(image):
     return power_spec
 
 
+# Noise estimation (determine the measurable delta E)
+def estimate_noise(bgr_image):
+    rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
+    rgb_image = rgb_image / 255.0
+    noise_estimates = restoration.estimate_sigma(rgb_image, multichannel=True)
+    return noise_estimates
+
+def rgb_to_lab_single(rgb_color):
+    """
+    Convert a single RGB color to Lab color space.
+    
+    Parameters:
+    rgb_color (list or tuple): A list or tuple of 3 float64 values representing an RGB color.
+    
+    Returns:
+    list: A list of 3 float64 values representing the Lab color.
+    """
+    # Convert input to a NumPy array and normalize if needed
+    rgb_color_np = np.array(rgb_color, dtype=np.float64)
+    
+    # Reshape to 1x1x3 to match the input shape expected by rgb2lab
+    rgb_color_np = rgb_color_np.reshape((1, 1, 3))
+    
+    # Convert from RGB to Lab
+    lab_color_np = rgb2lab(rgb_color_np)
+    
+    # Extract the Lab values from the resulting array
+    lab_color = lab_color_np[0, 0, :]
+    
+    # Return as list
+    return lab_color.tolist()
+
+# Once we have the standard deviation of the noise, we can estimate the likely
+# Lab color space deviation caused by noise alone. That way if we see that
+# pixel values are getting too far out of the expected range, we can decide
+# whether that is due to image noise or a real measurement.
+
+
 if __name__ == "__main__":
     imfile = 'C:/Users/Ryan.Larson.ROCKWELLINC/github/color-deviation/reference_images/single_light (1) ROI 1.jpg'
     # imfile = 'C:/Users/Ryan.Larson.ROCKWELLINC/github/color-deviation/reference_images/double_light (1) ROI 1.jpg'
     # image = cv2.imread(imfile)
-    image = cv2.imread(imfile, cv2.IMREAD_GRAYSCALE)
-        
-    # Compute power spectrum of the corrected image
-    power_spec = power_spectrum(image)
+    image = cv2.imread(imfile)
     
-    # Normalize the power spectrum
-    # Use percentile clipping to limit the range of values
-    pmin, pmax = np.percentile(power_spec, [1, 99])
-    power_spec_clipped = np.clip(power_spec, pmin, pmax)
+    # Estimate noise from the image (per channel, not grayscale)
+    rgb_noise = estimate_noise(image)
+    three_sigma_rgb_noise = [3*noise for noise in rgb_noise]
+    lab_noise = rgb_to_lab_single(rgb_noise)
+    three_sigma_lab_noise = rgb_to_lab_single(three_sigma_rgb_noise)
     
+    deltaE = np.sqrt(np.sum([noise**2 for noise in lab_noise]))
+    three_sigma_deltaE = np.sqrt(np.sum([noise**2 for noise in three_sigma_lab_noise]))
+    
+    print(f'deltaE = {deltaE}')
+    print(f'3 sigma deltaE = {three_sigma_deltaE}')
+    
+    # Set reference color and compute delta E matrix
+    reference_lab_color = (79.43, 5.33, 1.47)
+    lab_array = bgr_array_to_lab(image)
+    delta_e_matrix = calculate_deltaE_lab_array(lab_array, reference_lab_color)
+    
+    # Impose a fake mask by directly setting values as nan
+    delta_e_matrix_masked = delta_e_matrix.copy()
+    delta_e_matrix_masked[500:,:] = np.nan
+    
+    # blurred_delta_e = cv2.GaussianBlur(delta_e_matrix, (101,101), 0)
+    blurred_delta_e = cv2.GaussianBlur(delta_e_matrix_masked, (101,101), 0)
+    
+    # Plot results (more blur = less extreme delta E)
     plt.figure(dpi=300)
-    plt.imshow(np.log1p(power_spec_clipped), cmap='viridis')  # Visualize power spectrum
+    plt.imshow(blurred_delta_e, cmap='viridis')
     plt.colorbar()
-    plt.title('Power Spectrum')
-    plt.show()
+    
+    
+    
+    
+    
+    
+        
+    # # Compute power spectrum of the corrected image
+    # power_spec = power_spectrum(image)
+    
+    # # Normalize the power spectrum
+    # # Use percentile clipping to limit the range of values
+    # pmin, pmax = np.percentile(power_spec, [1, 99])
+    # power_spec_clipped = np.clip(power_spec, pmin, pmax)
+    
+    # plt.figure(dpi=300)
+    # plt.imshow(np.log1p(power_spec_clipped), cmap='viridis')  # Visualize power spectrum
+    # plt.colorbar()
+    # plt.title('Power Spectrum')
+    # plt.show()
     
     # # Apply a Gaussian blur to reduce noise
     # blurred = cv2.GaussianBlur(image, (7, 7), 0)

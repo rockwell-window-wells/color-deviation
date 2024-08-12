@@ -2,3 +2,5 @@
 /data
 /reference_images
 model.pth
+/test_training
+fasterrcnn_model.pth
