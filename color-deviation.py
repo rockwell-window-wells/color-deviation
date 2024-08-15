@@ -51,7 +51,6 @@ def calculate_deltaE(lab_image, reference_color: tuple):
     b_deviation = lab_image[..., 2] - b_ref
     delta_e = np.sqrt(l_deviation**2 + a_deviation**2 + b_deviation**2)
     deviations = (l_deviation, a_deviation, b_deviation)
-    
     return delta_e, deviations
 
 def bgr_to_lab(bgr_image):
@@ -59,35 +58,13 @@ def bgr_to_lab(bgr_image):
     lab_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2Lab)
     return lab_image
 
-# def bgr_array_to_lab(bgr_array):
-#     # Convert the BGR array to float32 and scale it to [0, 1]
-#     bgr_array = np.float32(bgr_array) / 255.0
-#     # Reshape to a single row image for conversion
-#     bgr_image = bgr_array.reshape(1, -1, 3)
-#     # Convert to Lab color space
-#     lab_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2Lab)
-#     # Reshape back to the original array shape
-#     lab_array = lab_image.reshape(-1, 3)
-#     return lab_array
-
 def bgr_array_to_lab(bgr_array):
     # Convert the BGR array to float32 and scale it to [0, 1]
     bgr_array = np.float32(bgr_array) / 255.0
     
     # Convert to Lab color space without reshaping
     lab_image = cv2.cvtColor(bgr_array, cv2.COLOR_BGR2Lab)
-    
     return lab_image
-
-# def calculate_deltaE_lab_array(lab_array):
-#     m = lab_array.shape[0]
-#     delta_e_matrix = np.zeros((m, m))
-#     for i in range(m):
-#         for j in range(i, m):
-#             delta_e = deltaE_cie76(lab_array[i], lab_array[j])
-#             delta_e_matrix[i, j] = delta_e
-#             delta_e_matrix[j, i] = delta_e  # Symmetric matrix
-#     return delta_e_matrix
 
 def calculate_deltaE_lab_array(lab_array, reference_lab_color):
     # lab_array should have the shape (height, width, 3)
@@ -104,7 +81,6 @@ def calculate_deltaE_lab_array(lab_array, reference_lab_color):
     
     # Reshape the delta_e_array back to the original image's height and width
     delta_e_matrix = delta_e_array.reshape(height, width)
-    
     return delta_e_matrix
 
 def resize_image(image):
@@ -123,8 +99,8 @@ def resize_image(image):
 
     '''
     # Get screen resolution (example resolution: 1920x1080)
-    screen_width = 1920
-    screen_height = 1080
+    screen_width = 800
+    screen_height = 480
     # Define a margin ratio (e.g., 0.9 means 10% margin)
     margin_ratio = 0.9
     # Adjust the available space by the margin ratio
@@ -134,7 +110,6 @@ def resize_image(image):
     scale_factor = min(adjusted_screen_width / image.shape[1], adjusted_screen_height / image.shape[0])
     # Resize the image to fit the screen with margin
     resized_image = cv2.resize(image, None, fx=scale_factor, fy=scale_factor)
-    
     return resized_image
 
 def show_resized_image(image, title_str):
@@ -151,7 +126,6 @@ def quantize_image(image, K=2):
     colors = np.uint8(colors)
     quantized_image = colors[label.flatten()]
     quantized_image = quantized_image.reshape((image.shape))
-    
     return quantized_image, colors
 
 def quantize_image_in_masked_area(image, mask, K=2):
@@ -170,16 +144,7 @@ def quantize_image_in_masked_area(image, mask, K=2):
     # Create quantized image
     quantized_image = image.copy()
     quantized_image[mask != 0] = colors[label.flatten()]
-
     return quantized_image, colors
-
-#     # Fourier Transform analysis
-# def power_spectrum(image):
-#     f_transform = fft2(image)
-#     f_transform_shifted = fftshift(f_transform)
-#     power_spec = np.abs(f_transform_shifted)**2
-#     return power_spec
-
 
 # Noise estimation (determine the measurable delta E)
 def estimate_noise(bgr_image):
@@ -336,19 +301,7 @@ def load_images_from_directory(directory):
 
 
 if __name__ == "__main__":
-    # imfile = 'C:/Users/Ryan.Larson.ROCKWELLINC/github/color-deviation/reference_images/test_image (7).jpg'
-    # imfile = 'C:/Users/Ryan.Larson.ROCKWELLINC/github/color-deviation/reference_images/single_light (1) ROI 1.jpg'
-    # imfile = 'C:/Users/Ryan.Larson.ROCKWELLINC/github/color-deviation/reference_images/poor_light ROI 1.jpg'
-    # image = cv2.imread(imfile)
-    # image = cv2.imread(imfile)
-    
     directory = "test_images"
-    
-    # capture_images(directory, num_images=1)
-    
-    # images = load_images_from_directory(directory)
-    
-    # image = images[0]
     
     picam2 = Picamera2()
     config = picam2.create_still_configuration()
@@ -359,40 +312,11 @@ if __name__ == "__main__":
     
     print('Picture taken')
     
-    # Estimate noise from the image (per channel, not grayscale)
-    # rgb_noise = estimate_noise(image)
-    # three_sigma_rgb_noise = [3*noise for noise in rgb_noise]
-    # lab_noise = rgb_to_lab_single(rgb_noise)
-    # three_sigma_lab_noise = rgb_to_lab_single(three_sigma_rgb_noise)
-    
-    # deltaE = np.sqrt(np.sum([noise**2 for noise in lab_noise]))
-    # three_sigma_deltaE = np.sqrt(np.sum([noise**2 for noise in three_sigma_lab_noise]))
-    
-    # print(f'deltaE = {deltaE}')
-    # print(f'3 sigma deltaE = {three_sigma_deltaE}')
-    
     # Set reference color and compute delta E matrix
     reference_lab_color = (78.960, 2.728, 12.231)
-    # reference_lab_color = (79.43, 5.33, 1.47)
     lab_array = bgr_array_to_lab(image)
-    # blurred_lab = cv2.GaussianBlur(lab_array, (101,101), 0)
-    
-    neighbor_size = 1
-    # neighbor_delta_e = calculate_max_neighbor_deviation(blurred_lab, neighbor_size=neighbor_size)
-    
-    # plt.figure(dpi=300)
-    # plt.imshow(neighbor_delta_e, cmap='plasma')
-    # plt.colorbar()
-    # plt.title(f'Blurred neighbor-based delta E\nneighbor_size={neighbor_size}')
     
     delta_e_matrix = calculate_deltaE_lab_array(lab_array, reference_lab_color)
-    
-    # # Impose a fake mask by directly setting values as nan
-    # delta_e_matrix_masked = delta_e_matrix.copy()
-    # delta_e_matrix_masked[500:,:] = np.nan
-    
-    # blurred_delta_e = cv2.GaussianBlur(delta_e_matrix, (101,101), 0)
-    # blurred_delta_e = cv2.GaussianBlur(delta_e_matrix_masked, (101,101), 0)
     
     # Plot results (more blur = less extreme delta E)
     plt.figure(figsize=(4,4), dpi=100)
@@ -400,189 +324,4 @@ if __name__ == "__main__":
     plt.colorbar()
     plt.title('Base image delta E')
     
-    # plt.figure(dpi=300)
-    # plt.imshow(blurred_delta_e, cmap='plasma')
-    # plt.colorbar()
-    # plt.title('Blurred image delta E')
-    
     plt.show()
-    
-    # plt.savefig(f'Blurred_(0x0).png')
-    # plt.close()
-    
-    # # Test blurring levels to see when texture is no longer visible
-    # start_size = 5
-    # end_size = 101
-    # for num in range(start_size, end_size+1):
-    #     if num % 8 == 1:
-    #         blurred_delta_e = cv2.GaussianBlur(delta_e_matrix, (num, num), 0)
-    #         # plt.figure(dpi=300)
-    #         # plt.imshow(blurred_delta_e, cmap='viridis')
-    #         # plt.colorbar()
-    #         # plt.title(f'Blur with kernel size ({num},{num})')
-    #         # plt.savefig(f'Blurred_({num}x{num}).png')
-    #         # plt.close()
-            
-    # dim = 1000
-    # small_delta_e_matrix = cv2.resize(delta_e_matrix, (dim, dim), interpolation=cv2.INTER_AREA)
-    # small_blurred_delta_e = cv2.resize(blurred_delta_e, (dim, dim), interpolation=cv2.INTER_AREA)
-    # small_neighbor_delta_e = cv2.resize(neighbor_delta_e, (dim, dim), interpolation=cv2.INTER_AREA)
-    
-    # xno = np.arange(small_delta_e_matrix.shape[1])
-    # yno = np.arange(small_delta_e_matrix.shape[0])
-    # xno, yno = np.meshgrid(xno, yno)
-    
-    # noblur_surface = go.Surface(x=xno, y=yno, z=small_delta_e_matrix, colorscale='plasma', name='No Blur')
-    
-    # xblur = np.arange(small_neighbor_delta_e.shape[1])
-    # yblur = np.arange(small_neighbor_delta_e.shape[0])
-    # xblur, yblur = np.meshgrid(xblur, yblur)
-    
-    # blur_surface = go.Surface(x=xblur, y=yblur, z=small_neighbor_delta_e, colorscale='plasma', name='Blur')
-    
-    # xblur = np.arange(small_blurred_delta_e.shape[1])
-    # yblur = np.arange(small_blurred_delta_e.shape[0])
-    # xblur, yblur = np.meshgrid(xblur, yblur)
-    
-    # blur_surface = go.Surface(x=xblur, y=yblur, z=small_blurred_delta_e, colorscale='plasma', name='Blur')
-    
-    # # fig = go.Figure(data=noblur_surface)
-    # figno = go.Figure(data=noblur_surface)
-    # figblur = go.Figure(data=blur_surface)
-    
-    # # Set the layout for the figure
-    # figno.update_layout(
-    #     title="No blur",
-    #     scene=dict(
-    #         xaxis_title='X Axis',
-    #         yaxis_title='Y Axis',
-    #         zaxis_title='Delta E'
-    #     ),
-    #     autosize=True
-    # )
-    
-    # figblur.update_layout(
-    #     title="Blur",
-    #     scene=dict(
-    #         xaxis_title='X Axis',
-    #         yaxis_title='Y Axis',
-    #         zaxis_title='Delta E'
-    #     ),
-    #     autosize=True
-    # )
-    
-    # # Show the figure
-    # figno.show(renderer='browser')
-    # figblur.show(renderer='browser')
-    
-    
-        
-    # # Compute power spectrum of the corrected image
-    # power_spec = power_spectrum(image)
-    
-    # # Normalize the power spectrum
-    # # Use percentile clipping to limit the range of values
-    # pmin, pmax = np.percentile(power_spec, [1, 99])
-    # power_spec_clipped = np.clip(power_spec, pmin, pmax)
-    
-    # plt.figure(dpi=300)
-    # plt.imshow(np.log1p(power_spec_clipped), cmap='viridis')  # Visualize power spectrum
-    # plt.colorbar()
-    # plt.title('Power Spectrum')
-    # plt.show()
-    
-    # # Apply a Gaussian blur to reduce noise
-    # blurred = cv2.GaussianBlur(image, (7, 7), 0)
-    # K = 3
-    # quantized_blurred, blurred_colors = quantize_image(blurred, K)
-    # quantized_image, colors = quantize_image(image, K)
-    
-    # quantized_blurred_lab = bgr_to_lab(quantized_blurred)
-    # reference_color = (75.075, -1.525, 10.267)
-    # delta_e, deviations = calculate_deltaE(quantized_blurred_lab, reference_color)
-    
-    # # show_resized_image(quantized_blurred, f'Blurred Image: {K} Colors')
-    # # show_resized_image(quantized_image, f'Quantized Image: {K} Colors')
-    
-    # # Mask any color values that are too dark
-    # n_darkest = 2
-    # brightness = np.sum(blurred_colors, axis=1)
-    
-    # sorted_indices = np.argsort(brightness)
-    # darkest_indices = sorted_indices[:n_darkest]
-    
-    # darkest_colors = blurred_colors[darkest_indices]
-    
-    # mask = np.zeros((quantized_blurred.shape[0], quantized_blurred.shape[1]), dtype=bool)
-    
-    # # Check each pixel in the quantized image
-    # for color in darkest_colors:
-    #     mask |= np.all(quantized_blurred == color, axis=-1)
-        
-    # mask = np.expand_dims(mask, axis=-1)
-    
-    # # darkthresh = 100
-    # # mask = quantized_blurred <= darkthresh
-    
-    # # Apply mask to blurred
-    # blurred_masked = blurred * ~mask
-    # # blurred_masked = np.where(~mask, np.nan, blurred)
-    # # show_resized_image(blurred_masked, "Blurred Masked")
-    
-    # # Convert to grayscale for binary operations
-    # gray_quantized = cv2.cvtColor(blurred_masked, cv2.COLOR_BGR2GRAY)
-    # _, binary = cv2.threshold(gray_quantized, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-
-    # # Define a kernel for morphological operations
-    # kernel = np.ones((7, 7), np.uint8)
-
-    # # Dilation and Erosion
-    # iterations = 30
-    # overshoot = 25
-    # binary = cv2.erode(binary, kernel, iterations=iterations)
-    # binary = cv2.dilate(binary, kernel, iterations=iterations+overshoot)
-    # binary = cv2.erode(binary, kernel, iterations=overshoot)
-    # dilated_masked = cv2.bitwise_and(blurred, blurred, mask=binary)
-    # # show_resized_image(dilated_masked, "Dilated Mask")
-    
-    
-    # # Quantize the masked image
-    # K = 4
-    # quantized_masked, masked_colors = quantize_image_in_masked_area(dilated_masked, binary, K=K)
-    # show_resized_image(quantized_masked, "Quantized Masked")
-    
-    
-    # # for _ in range(iterations):
-    # #     binary = cv2.dilate(binary, kernel, iterations=1)   # Dilate
-    
-    # # for _ in range(iterations):
-    # #     binary = cv2.erode(binary, kernel, iterations=1)    # Erode
-
-    # # # Opening (Erosion followed by Dilation)
-    # # opening = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
-
-    # # # Closing (Dilation followed by Erosion)
-    # # iterations = 100
-    # # for _ in range(iterations):
-    # #     binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-
-    # # dilated_masked = cv2.bitwise_and(blurred, blurred, mask=binary)
-    # # show_resized_image(dilated_masked, "Dilated Mask")
-    
-    # # # Quantize blurred_masked
-    # # K = 3
-    # # quantized_blurred_masked
-    
-    # # cmap = plt.get_cmap('jet')
-    # # fig, ax = plt.subplots(dpi=300)
-    # # cax = ax.imshow(delta_e, cmap=cmap, interpolation='bilinear')
-    # # cbar = plt.colorbar(cax, ax=ax)
-    # # cbar.set_label('Delta E')
-
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-    
-    # # Calculate delta E between each quantized color in the end (one of the
-    # # colors will be black, so this will always have some outliers)
-    # lab_array = bgr_array_to_lab(masked_colors)
-    # delta_e_matrix = calculate_deltaE_lab_array(lab_array)
