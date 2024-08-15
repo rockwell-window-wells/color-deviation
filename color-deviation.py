@@ -8,6 +8,8 @@ Created on Thu Aug  1 12:58:43 2024
 import numpy as np
 # import pandas as pd
 import cv2
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 from skimage.color import deltaE_cie76, rgb2lab
 # from scipy.fft import fft2, ifft2, fftshift
@@ -18,6 +20,7 @@ from astropy.stats import sigma_clip
 from picamera2 import Picamera2
 from time import sleep
 from pathlib import Path
+from PIL import Image
 
 #%% Methods
 def calculate_deltaE(lab_image, reference_color: tuple):
@@ -309,6 +312,23 @@ def capture_images(directory, num_images=10):
 
     picam2.close()
 
+def load_images_from_directory(directory):
+    """
+    Load all images from a directory into a list of 3D numpy arrays.
+
+    Parameters:
+    - directory: Directory containing the images.
+
+    Returns:
+    - images: List of 3D numpy arrays (RGB images).
+    """
+    print('Loading images')
+    images = []
+    for image_path in sorted(Path(directory).glob("*.png")):
+        img = Image.open(image_path)
+        images.append(np.array(img))
+    return images
+
 # Once we have the standard deviation of the noise, we can estimate the likely
 # Lab color space deviation caused by noise alone. That way if we see that
 # pixel values are getting too far out of the expected range, we can decide
@@ -318,35 +338,52 @@ def capture_images(directory, num_images=10):
 if __name__ == "__main__":
     # imfile = 'C:/Users/Ryan.Larson.ROCKWELLINC/github/color-deviation/reference_images/test_image (7).jpg'
     # imfile = 'C:/Users/Ryan.Larson.ROCKWELLINC/github/color-deviation/reference_images/single_light (1) ROI 1.jpg'
-    imfile = 'C:/Users/Ryan.Larson.ROCKWELLINC/github/color-deviation/reference_images/poor_light ROI 1.jpg'
+    # imfile = 'C:/Users/Ryan.Larson.ROCKWELLINC/github/color-deviation/reference_images/poor_light ROI 1.jpg'
     # image = cv2.imread(imfile)
-    image = cv2.imread(imfile)
+    # image = cv2.imread(imfile)
+    
+    directory = "test_images"
+    
+    # capture_images(directory, num_images=1)
+    
+    # images = load_images_from_directory(directory)
+    
+    # image = images[0]
+    
+    picam2 = Picamera2()
+    config = picam2.create_still_configuration()
+    picam2.configure(config)
+    picam2.start()
+    image = picam2.capture_array()
+    picam2.stop()
+    
+    print('Picture taken')
     
     # Estimate noise from the image (per channel, not grayscale)
-    rgb_noise = estimate_noise(image)
-    three_sigma_rgb_noise = [3*noise for noise in rgb_noise]
-    lab_noise = rgb_to_lab_single(rgb_noise)
-    three_sigma_lab_noise = rgb_to_lab_single(three_sigma_rgb_noise)
+    # rgb_noise = estimate_noise(image)
+    # three_sigma_rgb_noise = [3*noise for noise in rgb_noise]
+    # lab_noise = rgb_to_lab_single(rgb_noise)
+    # three_sigma_lab_noise = rgb_to_lab_single(three_sigma_rgb_noise)
     
-    deltaE = np.sqrt(np.sum([noise**2 for noise in lab_noise]))
-    three_sigma_deltaE = np.sqrt(np.sum([noise**2 for noise in three_sigma_lab_noise]))
+    # deltaE = np.sqrt(np.sum([noise**2 for noise in lab_noise]))
+    # three_sigma_deltaE = np.sqrt(np.sum([noise**2 for noise in three_sigma_lab_noise]))
     
-    print(f'deltaE = {deltaE}')
-    print(f'3 sigma deltaE = {three_sigma_deltaE}')
+    # print(f'deltaE = {deltaE}')
+    # print(f'3 sigma deltaE = {three_sigma_deltaE}')
     
     # Set reference color and compute delta E matrix
     reference_lab_color = (78.960, 2.728, 12.231)
     # reference_lab_color = (79.43, 5.33, 1.47)
     lab_array = bgr_array_to_lab(image)
-    blurred_lab = cv2.GaussianBlur(lab_array, (101,101), 0)
+    # blurred_lab = cv2.GaussianBlur(lab_array, (101,101), 0)
     
     neighbor_size = 1
-    neighbor_delta_e = calculate_max_neighbor_deviation(blurred_lab, neighbor_size=neighbor_size)
+    # neighbor_delta_e = calculate_max_neighbor_deviation(blurred_lab, neighbor_size=neighbor_size)
     
-    plt.figure(dpi=300)
-    plt.imshow(neighbor_delta_e, cmap='plasma')
-    plt.colorbar()
-    plt.title(f'Blurred neighbor-based delta E\nneighbor_size={neighbor_size}')
+    # plt.figure(dpi=300)
+    # plt.imshow(neighbor_delta_e, cmap='plasma')
+    # plt.colorbar()
+    # plt.title(f'Blurred neighbor-based delta E\nneighbor_size={neighbor_size}')
     
     delta_e_matrix = calculate_deltaE_lab_array(lab_array, reference_lab_color)
     
@@ -354,19 +391,19 @@ if __name__ == "__main__":
     # delta_e_matrix_masked = delta_e_matrix.copy()
     # delta_e_matrix_masked[500:,:] = np.nan
     
-    blurred_delta_e = cv2.GaussianBlur(delta_e_matrix, (101,101), 0)
+    # blurred_delta_e = cv2.GaussianBlur(delta_e_matrix, (101,101), 0)
     # blurred_delta_e = cv2.GaussianBlur(delta_e_matrix_masked, (101,101), 0)
     
     # Plot results (more blur = less extreme delta E)
-    plt.figure(dpi=300)
-    plt.imshow(delta_e_matrix, cmap='plasma')
+    plt.figure(figsize=(4,4), dpi=100)
+    plt.imshow(delta_e_matrix, cmap='viridis')
     plt.colorbar()
     plt.title('Base image delta E')
     
-    plt.figure(dpi=300)
-    plt.imshow(blurred_delta_e, cmap='plasma')
-    plt.colorbar()
-    plt.title('Blurred image delta E')
+    # plt.figure(dpi=300)
+    # plt.imshow(blurred_delta_e, cmap='plasma')
+    # plt.colorbar()
+    # plt.title('Blurred image delta E')
     
     plt.show()
     
