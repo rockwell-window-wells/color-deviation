@@ -7,7 +7,8 @@ Created on Thu Aug 15 08:19:50 2024
 
 import numpy as np
 from astropy.stats import sigma_clip
-from picamera2 import Picamera2, Preview
+from picamera2 import Picamera2
+from picamera2.previews import QtPreview
 from time import sleep
 from pathlib import Path
 from PIL import Image
@@ -24,10 +25,12 @@ def capture_images(directory, num_images=10):
     """
     picam2 = Picamera2()
     picam2.configure(picam2.create_still_configuration())
-    picam2.start_preview(Preview.QTGL)
+    # picam2.start_preview(QtPreview())
+    picam2.start()
     sleep(2)  # Allow the camera to adjust
 
     for i in range(num_images):
+        print(f'Capturing image_{i:03d}.png')
         image_path = Path(directory) / f"image_{i:03d}.png"
         picam2.capture_file(str(image_path))
         sleep(1)  # Small delay between captures
@@ -45,6 +48,7 @@ def load_images_from_directory(directory):
     Returns:
     - images: List of 3D numpy arrays (RGB images).
     """
+    print('Loading images')
     images = []
     for image_path in sorted(Path(directory).glob("*.png")):
         img = Image.open(image_path)
@@ -63,6 +67,8 @@ def sigma_clipping_stack_rgb(images, sigma=3):
     Returns:
     - master_flat: 3D numpy array representing the master flat frame in RGB.
     """
+    print(f'Performing sigma clipping stacking on {len(images)} images')
+    
     # Stack images into a 4D numpy array (number of images, height, width, channels)
     image_stack = np.stack(images, axis=0)
     
@@ -103,9 +109,9 @@ def save_and_display_flat_field(master_flat, output_file):
 
 if __name__ == "__main__":
     # Define the directory to save images and the number of images to capture
-    image_directory = "/home/pi/flat_field_images"
+    image_directory = "flats"
     num_images_to_capture = 10
-
+    
     # Create the directory if it doesn't exist
     Path(image_directory).mkdir(parents=True, exist_ok=True)
 
@@ -119,5 +125,5 @@ if __name__ == "__main__":
     master_flat = sigma_clipping_stack_rgb(images, sigma=3)
 
     # Save and display the flat field image
-    output_path = "/home/pi/flat_field.dng"  # Output file path
+    output_path = "flat_field.png"  # Output file path
     save_and_display_flat_field(master_flat, output_path)
