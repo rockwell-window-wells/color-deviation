@@ -12,9 +12,12 @@ import matplotlib.pyplot as plt
 from skimage.color import deltaE_cie76, rgb2lab
 # from scipy.fft import fft2, ifft2, fftshift
 import skimage.restoration as restoration
-import plotly.graph_objects as go
+# import plotly.graph_objects as go
 import sys
 from astropy.stats import sigma_clip
+from picamera2 import Picamera2
+from time import sleep
+from pathlib import Path
 
 #%% Methods
 def calculate_deltaE(lab_image, reference_color: tuple):
@@ -284,6 +287,28 @@ def sigma_clipping_stack_rgb(images, sigma=3):
     
     return master_flat
 
+def capture_images(directory, num_images=10):
+    """
+    Capture a set number of images using Picamera2 and save them to a directory.
+
+    Parameters:
+    - directory: Directory where the images will be saved.
+    - num_images: Number of images to capture.
+    """
+    picam2 = Picamera2()
+    picam2.configure(picam2.create_still_configuration())
+    # picam2.start_preview(QtPreview())
+    picam2.start()
+    sleep(2)  # Allow the camera to adjust
+
+    for i in range(num_images):
+        print(f'Capturing image_{i:03d}.png')
+        image_path = Path(directory) / f"image_{i:03d}.png"
+        picam2.capture_file(str(image_path))
+        sleep(1)  # Small delay between captures
+
+    picam2.close()
+
 # Once we have the standard deviation of the noise, we can estimate the likely
 # Lab color space deviation caused by noise alone. That way if we see that
 # pixel values are getting too far out of the expected range, we can decide
@@ -319,56 +344,64 @@ if __name__ == "__main__":
     neighbor_delta_e = calculate_max_neighbor_deviation(blurred_lab, neighbor_size=neighbor_size)
     
     plt.figure(dpi=300)
-    plt.imshow(neighbor_delta_e, cmap='viridis')
+    plt.imshow(neighbor_delta_e, cmap='plasma')
     plt.colorbar()
     plt.title(f'Blurred neighbor-based delta E\nneighbor_size={neighbor_size}')
     
     delta_e_matrix = calculate_deltaE_lab_array(lab_array, reference_lab_color)
     
-    # Impose a fake mask by directly setting values as nan
-    delta_e_matrix_masked = delta_e_matrix.copy()
-    delta_e_matrix_masked[500:,:] = np.nan
+    # # Impose a fake mask by directly setting values as nan
+    # delta_e_matrix_masked = delta_e_matrix.copy()
+    # delta_e_matrix_masked[500:,:] = np.nan
     
-    # blurred_delta_e = cv2.GaussianBlur(delta_e_matrix, (101,101), 0)
-    blurred_delta_e = cv2.GaussianBlur(delta_e_matrix_masked, (101,101), 0)
+    blurred_delta_e = cv2.GaussianBlur(delta_e_matrix, (101,101), 0)
+    # blurred_delta_e = cv2.GaussianBlur(delta_e_matrix_masked, (101,101), 0)
     
-    # # Plot results (more blur = less extreme delta E)
-    # plt.figure(dpi=300)
-    # plt.imshow(delta_e_matrix, cmap='viridis')
-    # plt.colorbar()
-    # plt.title('No blur')
-    # # plt.savefig(f'Blurred_(0x0).png')
-    # # plt.close()
+    # Plot results (more blur = less extreme delta E)
+    plt.figure(dpi=300)
+    plt.imshow(delta_e_matrix, cmap='plasma')
+    plt.colorbar()
+    plt.title('Base image delta E')
     
-    # Test blurring levels to see when texture is no longer visible
-    start_size = 5
-    end_size = 101
-    for num in range(start_size, end_size+1):
-        if num % 8 == 1:
-            blurred_delta_e = cv2.GaussianBlur(delta_e_matrix, (num, num), 0)
-            # plt.figure(dpi=300)
-            # plt.imshow(blurred_delta_e, cmap='viridis')
-            # plt.colorbar()
-            # plt.title(f'Blur with kernel size ({num},{num})')
-            # plt.savefig(f'Blurred_({num}x{num}).png')
-            # plt.close()
+    plt.figure(dpi=300)
+    plt.imshow(blurred_delta_e, cmap='plasma')
+    plt.colorbar()
+    plt.title('Blurred image delta E')
+    
+    plt.show()
+    
+    # plt.savefig(f'Blurred_(0x0).png')
+    # plt.close()
+    
+    # # Test blurring levels to see when texture is no longer visible
+    # start_size = 5
+    # end_size = 101
+    # for num in range(start_size, end_size+1):
+    #     if num % 8 == 1:
+    #         blurred_delta_e = cv2.GaussianBlur(delta_e_matrix, (num, num), 0)
+    #         # plt.figure(dpi=300)
+    #         # plt.imshow(blurred_delta_e, cmap='viridis')
+    #         # plt.colorbar()
+    #         # plt.title(f'Blur with kernel size ({num},{num})')
+    #         # plt.savefig(f'Blurred_({num}x{num}).png')
+    #         # plt.close()
             
-    dim = 1000
-    small_delta_e_matrix = cv2.resize(delta_e_matrix, (dim, dim), interpolation=cv2.INTER_AREA)
-    small_blurred_delta_e = cv2.resize(blurred_delta_e, (dim, dim), interpolation=cv2.INTER_AREA)
-    small_neighbor_delta_e = cv2.resize(neighbor_delta_e, (dim, dim), interpolation=cv2.INTER_AREA)
+    # dim = 1000
+    # small_delta_e_matrix = cv2.resize(delta_e_matrix, (dim, dim), interpolation=cv2.INTER_AREA)
+    # small_blurred_delta_e = cv2.resize(blurred_delta_e, (dim, dim), interpolation=cv2.INTER_AREA)
+    # small_neighbor_delta_e = cv2.resize(neighbor_delta_e, (dim, dim), interpolation=cv2.INTER_AREA)
     
-    xno = np.arange(small_delta_e_matrix.shape[1])
-    yno = np.arange(small_delta_e_matrix.shape[0])
-    xno, yno = np.meshgrid(xno, yno)
+    # xno = np.arange(small_delta_e_matrix.shape[1])
+    # yno = np.arange(small_delta_e_matrix.shape[0])
+    # xno, yno = np.meshgrid(xno, yno)
     
-    noblur_surface = go.Surface(x=xno, y=yno, z=small_delta_e_matrix, colorscale='plasma', name='No Blur')
+    # noblur_surface = go.Surface(x=xno, y=yno, z=small_delta_e_matrix, colorscale='plasma', name='No Blur')
     
-    xblur = np.arange(small_neighbor_delta_e.shape[1])
-    yblur = np.arange(small_neighbor_delta_e.shape[0])
-    xblur, yblur = np.meshgrid(xblur, yblur)
+    # xblur = np.arange(small_neighbor_delta_e.shape[1])
+    # yblur = np.arange(small_neighbor_delta_e.shape[0])
+    # xblur, yblur = np.meshgrid(xblur, yblur)
     
-    blur_surface = go.Surface(x=xblur, y=yblur, z=small_neighbor_delta_e, colorscale='plasma', name='Blur')
+    # blur_surface = go.Surface(x=xblur, y=yblur, z=small_neighbor_delta_e, colorscale='plasma', name='Blur')
     
     # xblur = np.arange(small_blurred_delta_e.shape[1])
     # yblur = np.arange(small_blurred_delta_e.shape[0])
@@ -376,34 +409,34 @@ if __name__ == "__main__":
     
     # blur_surface = go.Surface(x=xblur, y=yblur, z=small_blurred_delta_e, colorscale='plasma', name='Blur')
     
-    # fig = go.Figure(data=noblur_surface)
-    figno = go.Figure(data=noblur_surface)
-    figblur = go.Figure(data=blur_surface)
+    # # fig = go.Figure(data=noblur_surface)
+    # figno = go.Figure(data=noblur_surface)
+    # figblur = go.Figure(data=blur_surface)
     
-    # Set the layout for the figure
-    figno.update_layout(
-        title="No blur",
-        scene=dict(
-            xaxis_title='X Axis',
-            yaxis_title='Y Axis',
-            zaxis_title='Delta E'
-        ),
-        autosize=True
-    )
+    # # Set the layout for the figure
+    # figno.update_layout(
+    #     title="No blur",
+    #     scene=dict(
+    #         xaxis_title='X Axis',
+    #         yaxis_title='Y Axis',
+    #         zaxis_title='Delta E'
+    #     ),
+    #     autosize=True
+    # )
     
-    figblur.update_layout(
-        title="Blur",
-        scene=dict(
-            xaxis_title='X Axis',
-            yaxis_title='Y Axis',
-            zaxis_title='Delta E'
-        ),
-        autosize=True
-    )
+    # figblur.update_layout(
+    #     title="Blur",
+    #     scene=dict(
+    #         xaxis_title='X Axis',
+    #         yaxis_title='Y Axis',
+    #         zaxis_title='Delta E'
+    #     ),
+    #     autosize=True
+    # )
     
-    # Show the figure
-    figno.show(renderer='browser')
-    figblur.show(renderer='browser')
+    # # Show the figure
+    # figno.show(renderer='browser')
+    # figblur.show(renderer='browser')
     
     
         
