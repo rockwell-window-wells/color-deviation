@@ -89,7 +89,7 @@ def sigma_clipping_stack_rgb(images, sigma=3):
     return master_flat
 
 
-def save_and_display_flat_field(master_flat, output_file):
+def save_and_display_master_dark(master_dark, output_file):
     """
     Save the flat field image to a file and display it.
 
@@ -98,32 +98,33 @@ def save_and_display_flat_field(master_flat, output_file):
     - output_file: Path where the flat field image will be saved.
     """
     # Convert to Image object and save in raw format
-    flat_image = Image.fromarray(np.uint8(master_flat))
+    flat_image = Image.fromarray(np.uint8(master_dark))
     flat_image.save(output_file)
     
     # Display the flat field image
-    plt.imshow(master_flat.astype(np.uint8))
+    plt.imshow(master_dark.astype(np.uint8))
     plt.axis('off')
     plt.show()
 
 
 if __name__ == "__main__":
     # Define the directory to save images and the number of images to capture
-    image_directory = "test_images"
-    num_images_to_capture = 10
+    image_directory = "dark_images"
+    # num_images_to_capture = 10
     
     # Create the directory if it doesn't exist
-    Path(image_directory).mkdir(parents=True, exist_ok=True)
+    # Path(image_directory).mkdir(parents=True, exist_ok=True)
 
     # Capture images using Picamera2
-    capture_images(image_directory, num_images=num_images_to_capture)
+    # capture_images(image_directory, num_images=num_images_to_capture)
 
     # Load images from the directory
-    # images = load_images_from_directory(image_directory)
+    images = load_images_from_directory(image_directory)
 
     # Perform sigma clipping stacking
-    # master_flat = sigma_clipping_stack_rgb(images, sigma=3)
+    master_dark = sigma_clipping_stack_rgb(images, sigma=3)
 
     # Save and display the flat field image
-    # output_path = "flat_field.png"  # Output file path
-    # save_and_display_flat_field(master_flat, output_path)
+    output_path = "dark_calibration.png"  # Output file path
+    save_and_display_master_dark(master_dark, output_path)
+
