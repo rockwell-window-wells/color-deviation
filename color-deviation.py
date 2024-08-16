@@ -294,6 +294,20 @@ def load_images_from_directory(directory):
         images.append(np.array(img))
     return images
 
+def flat_field_correct(target_image, flat_field):
+    # Ensure that the target image and the flat field image are the same size
+    assert target_image.shape == flat_field.shape
+    
+    target_image = target_image.astype(np.float32)
+    flat_field = flat_field.astype(np.float32)
+    
+    flat_corrected = flat_field / np.median(flat_field)
+    
+    calibrated_image = target_image / flat_corrected
+    
+    return calibrated_image
+    
+
 # Once we have the standard deviation of the noise, we can estimate the likely
 # Lab color space deviation caused by noise alone. That way if we see that
 # pixel values are getting too far out of the expected range, we can decide
@@ -314,7 +328,12 @@ if __name__ == "__main__":
     
     # Set reference color and compute delta E matrix
     reference_lab_color = (78.960, 2.728, 12.231)
-    lab_array = bgr_array_to_lab(image)
+    
+    # Correct the image for flat field
+    flat_field = cv2.imread("reference_images/flat_field.png")
+    calibrated_image = flat_field_correct(image, flat_field)
+    lab_array = bgr_array_to_lab(calibrated_image)
+    # lab_array = bgr_array_to_lab(image)
     
     delta_e_matrix = calculate_deltaE_lab_array(lab_array, reference_lab_color)
     
