@@ -318,29 +318,48 @@ if __name__ == "__main__":
     directory = "test_images"
     
     picam2 = Picamera2()
-    config = picam2.create_still_configuration()
+    config = picam2.create_still_configuration(
+        main={"size": (4056, 3040)},
+    )
     picam2.configure(config)
+    
+    picam2.set_controls({
+        "ExposureTime": 20000,
+        "AnalogueGain": 1.0,
+        "AwbEnable": True,
+        # "ColourGains": (1.0, 1.0, 1.0)
+    })
+    
     picam2.start()
     image = picam2.capture_array()
     picam2.stop()
     
     print('Picture taken')
     
+    image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    cv2.imwrite('test_histogram.png', image_bgr)
+    
+    plt.figure(figsize=(4,4), dpi=100)
+    plt.imshow(image)
+    plt.colorbar()
+    plt.title('Test')
+    plt.show()
+    
     # Set reference color and compute delta E matrix
-    reference_lab_color = (78.960, 2.728, 12.231)
+    # reference_lab_color = (78.960, 2.728, 12.231)
     
     # Correct the image for flat field
-    flat_field = cv2.imread("reference_images/flat_field.png")
-    calibrated_image = flat_field_correct(image, flat_field)
-    lab_array = bgr_array_to_lab(calibrated_image)
+    # flat_field = cv2.imread("reference_images/flat_field.png")
+    # calibrated_image = flat_field_correct(image, flat_field)
+    # lab_array = bgr_array_to_lab(calibrated_image)
     # lab_array = bgr_array_to_lab(image)
     
-    delta_e_matrix = calculate_deltaE_lab_array(lab_array, reference_lab_color)
+    # delta_e_matrix = calculate_deltaE_lab_array(lab_array, reference_lab_color)
     
     # Plot results (more blur = less extreme delta E)
-    plt.figure(figsize=(4,4), dpi=100)
-    plt.imshow(delta_e_matrix, cmap='viridis')
-    plt.colorbar()
-    plt.title('Base image delta E')
+    # plt.figure(figsize=(4,4), dpi=100)
+    # plt.imshow(delta_e_matrix, cmap='viridis')
+    # plt.colorbar()
+    # plt.title('Base image delta E')
     
-    plt.show()
+    # plt.show()
