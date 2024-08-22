@@ -67,7 +67,7 @@ def apply_lab_color_correction(input_image, ref_card, input_card):
 
 # Path to the images
 refimage = '/home/rweng/Documents/GitHub/color-deviation/color_ref.png'
-# inputimage = 'C:/Users/Ryan.Larson.ROCKWELLINC/github/color-deviation/color_target.png'
+# inputimage = '/home/rweng/Documents/GitHub/color-deviation/roi_test.png'
 picam2 = Picamera2()
 config = picam2.create_still_configuration(
     main={"size": (4056, 3040)},
