@@ -334,7 +334,7 @@ if __name__ == "__main__":
     image = picam2.capture_array()
     picam2.stop()
     
-    print('Picture taken')
+    print('[INFO] Picture taken')
     
     image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     cv2.imwrite('test_histogram.png', image_bgr)
@@ -346,20 +346,20 @@ if __name__ == "__main__":
     plt.show()
     
     # Set reference color and compute delta E matrix
-    # reference_lab_color = (78.960, 2.728, 12.231)
+    reference_lab_color = (79.69, 1.75, 5.75)
     
     # Correct the image for flat field
-    # flat_field = cv2.imread("reference_images/flat_field.png")
-    # calibrated_image = flat_field_correct(image, flat_field)
-    # lab_array = bgr_array_to_lab(calibrated_image)
-    # lab_array = bgr_array_to_lab(image)
+    flat_field = cv2.imread("/home/rweng/Documents/GitHub/color-deviation/flat_field.png")
+    calibrated_image = flat_field_correct(image, flat_field)
+    lab_array = bgr_array_to_lab(calibrated_image)
+    lab_array = bgr_array_to_lab(image)
     
-    # delta_e_matrix = calculate_deltaE_lab_array(lab_array, reference_lab_color)
+    delta_e_matrix = calculate_deltaE_lab_array(lab_array, reference_lab_color)
     
     # Plot results (more blur = less extreme delta E)
-    # plt.figure(figsize=(4,4), dpi=100)
-    # plt.imshow(delta_e_matrix, cmap='viridis')
-    # plt.colorbar()
-    # plt.title('Base image delta E')
+    plt.figure(figsize=(4,4), dpi=100)
+    plt.imshow(delta_e_matrix, cmap='viridis')
+    plt.colorbar()
+    plt.title('Base image delta E')
     
-    # plt.show()
+    plt.show()
