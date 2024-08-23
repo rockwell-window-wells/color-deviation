@@ -11,6 +11,7 @@ import cv2
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 from skimage.color import deltaE_cie76, rgb2lab
 # from scipy.fft import fft2, ifft2, fftshift
 import skimage.restoration as restoration
@@ -18,7 +19,7 @@ import skimage.restoration as restoration
 import sys
 from astropy.stats import sigma_clip
 from picamera2 import Picamera2
-from time import sleep
+from time import sleep, time
 from pathlib import Path
 from PIL import Image
 
@@ -263,17 +264,12 @@ def capture_images(picam, directory, num_images=10):
     - directory: Directory where the images will be saved.
     - num_images: Number of images to capture.
     """
-    # picam2 = Picamera2()
-    # picam2.configure(picam2.create_still_configuration())
-    # # picam2.start_preview(QtPreview())
-    # picam2.start()
-    # sleep(2)  # Allow the camera to adjust
-
     for i in range(num_images):
         print(f'Capturing image_{i:03d}.png')
         image_path = Path(directory) / f"image_{i:03d}.png"
         picam.capture_file(str(image_path))
-        sleep(1)  # Small delay between captures
+        sleep(0.5)  # Small delay between captures
+        # print(f'Automatic ColorGains:\t{picam.camera_controls["ColourGains"]}')
 
     picam.close()
 
@@ -332,34 +328,122 @@ def stackImagesECC(file_list):
     stacked_image = (stacked_image*255).astype(np.uint8)
     return stacked_image
 
-# Once we have the standard deviation of the noise, we can estimate the likely
-# Lab color space deviation caused by noise alone. That way if we see that
-# pixel values are getting too far out of the expected range, we can decide
-# whether that is due to image noise or a real measurement.
+def find_color_card(image):
+    arucoDict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_ARUCO_ORIGINAL)
+    arucoParams = cv2.aruco.DetectorParameters()
+    (corners, ids, rejected) = cv2.aruco.detectMarkers(image, arucoDict, parameters=arucoParams)
+    return corners, ids
+
+def overlay_markers(image, corners, ids):
+    if ids is not None:
+        cv2.aruco.drawDetectedMarkers(image, corners, ids)
+    return image
+
+def extract_color_card(image, corners, ids):    
+    try:
+        ids = ids.flatten()
+        i = np.squeeze(np.where(ids == 923))
+        topLeft = np.squeeze(corners[i])[0]
+        i = np.squeeze(np.where(ids == 1001))
+        topRight = np.squeeze(corners[i])[1]
+        i = np.squeeze(np.where(ids == 241))
+        bottomRight = np.squeeze(corners[i])[2]
+        i = np.squeeze(np.where(ids == 1007))
+        bottomLeft = np.squeeze(corners[i])[3]
+    except:
+        return None
+    
+    cardCoords = np.array([topLeft, topRight, bottomRight, bottomLeft])
+    card = four_point_transform(image, cardCoords)
+    return card
+
+def apply_lab_color_correction(input_image, ref_card, input_card):
+    # Convert the cards and image to LAB color space
+    ref_card_lab = cv2.cvtColor(ref_card, cv2.COLOR_BGR2LAB)
+    input_card_lab = cv2.cvtColor(input_card, cv2.COLOR_BGR2LAB)
+    input_image_lab = cv2.cvtColor(input_image, cv2.COLOR_BGR2LAB)
+
+    # Calculate the mean and standard deviation of each channel in LAB space
+    ref_mean, ref_std = cv2.meanStdDev(ref_card_lab)
+    input_mean, input_std = cv2.meanStdDev(input_card_lab)
+
+    # Apply the correction
+    l, a, b = cv2.split(input_image_lab)
+    l = ((l - input_mean[0]) / input_std[0]) * ref_std[0] + ref_mean[0]
+    a = ((a - input_mean[1]) / input_std[1]) * ref_std[1] + ref_mean[1]
+    b = ((b - input_mean[2]) / input_std[2]) * ref_std[2] + ref_mean[2]
+
+    # Clip the values to ensure they stay within the valid LAB range
+    l = np.clip(l, 0, 255)
+    a = np.clip(a, 0, 255)
+    b = np.clip(b, 0, 255)
+
+    # Merge channels back
+    corrected_lab = cv2.merge((l, a, b))
+    corrected_image = cv2.cvtColor(corrected_lab.astype(np.uint8), cv2.COLOR_LAB2BGR)
+
+    return corrected_image
+
+def color_correction(image):
+    # Path to the images
+    refimage = '/home/rweng/Documents/GitHub/color-deviation/color_ref.png'
+    
+    ref = cv2.imread(refimage)
+
+    # Find and extract color matching cards
+    print("[INFO] finding color matching cards...")
+    refCorners, refIds = find_color_card(ref)
+    imageCorners, imageIds = find_color_card(image)
+
+    # Extract color matching cards
+    refCard = extract_color_card(ref, refCorners, refIds)
+    imageCard = extract_color_card(image, imageCorners, imageIds)
+
+    # Exit if color cards are not found
+    if refCard is None:
+        print("[INFO] could not find color matching card in reference image")
+        sys.exit(0)
+    elif imageCard is None:
+        print("[INFO] could not find color matching card in target image")
+        sys.exit(0)
+    else:
+        print("[INFO] color matching cards found in reference and target images")
+
+    # Apply LAB color correction to the entire image
+    print("[INFO] applying LAB color correction...")
+    corrected_image = apply_lab_color_correction(image, refCard, imageCard)
+
+    corrected_image = cv2.cvtColor(corrected_image, cv2.COLOR_BGR2RGB)
+    return corrected_image
 
 
 if __name__ == "__main__":
     directory = "./temp"
     
+    start_time = time()
+    
     picam2 = Picamera2()
     config = picam2.create_still_configuration(
         main={"size": (4056, 3040)},
         )
+    picam2.configure(config)
     
-    picam2.set_controls({
-        "ExposureTime":20000, # microseconds
-        "AnalogueGain": 1.0,
-        "AwbEnable": True,
-        "ColourGains": (1.5, 1.5)
-        })
+    # picam2.set_controls({
+        # "ExposureTime":20000, # microseconds
+        # "AnalogueGain": 1.0,
+        # "AwbEnable": True,
+        # "ColourGains": (1.0, 1.0, 1.0)
+        # })
     
     picam2.start()
     
-    num_images = 10
+    num_images = 20
     print(f'[INFO] Capturing {num_images} images')
     capture_images(picam2, directory, num_images=num_images)
     
-    files = [file.name for file in Path(directory).iterdir() if file.is_file()]
+    files = [str(file.resolve()) for file in Path(directory).iterdir() if file.is_file()]
+    # print(type(files))
+    # print(files)
     
     print(f'[INFO] Stacking {num_images} images')
     stacked_image = stackImagesECC(files)
@@ -368,7 +452,10 @@ if __name__ == "__main__":
     print('[INFO] Calibrating for flat field')
     flat_field = cv2.imread("./flat_field.png")
     calibrated_image = flat_field_correct(stacked_image, flat_field)
-    lab_array = bgr_array_to_lab(calibrated_image)
+    
+    corrected_image = color_correction(calibrated_image)
+    
+    lab_array = bgr_array_to_lab(corrected_image)
     # lab_array = bgr_array_to_lab(stacked_image)
     
     # Mask the image
@@ -382,20 +469,47 @@ if __name__ == "__main__":
     masked_image = lab_array.copy()
     masked_image[~mask_3d] = np.nan
     
-    reference_lab_color = (79.69, 1.75, 5.75)
+    # reference_lab_color = (79.69, 1.75, 5.75)
+    reference_lab_color = (66.92, 0.437, 8.31)
     print('[INFO] Calculating delta E')
     delta_e_matrix = calculate_deltaE_lab_array(masked_image, reference_lab_color)
     # delta_e_matrix = calculate_deltaE_lab_array(lab_array, reference_lab_color)
     
-    print('\nRESULTS:')
-    print(f'Min delta E:\t{np.min(delta_e_matrix):.2f}')
-    print(f'Max delta E:\t{np.max(delta_e_matrix):.2f}')
+    max_val = np.nanmax(delta_e_matrix)
+    min_val = np.nanmin(delta_e_matrix)
+    max_pos = np.unravel_index(np.nanargmax(delta_e_matrix), delta_e_matrix.shape)
+    min_pos = np.unravel_index(np.nanargmin(delta_e_matrix), delta_e_matrix.shape)
     
-    plt.figure(figsize=(4,4), dpi=200)
-    plt.imshow(delta_e_matrix, cmap='viridis')
-    plt.colorbar()
-    plt.title('Delta E')
+    print('\nRESULTS:')
+    print(f'Min delta E:\t{np.nanmin(delta_e_matrix):.2f}')
+    print(f'Max delta E:\t{np.nanmax(delta_e_matrix):.2f}')
+    
+    end_time = time()
+    elapsed_time = end_time - start_time
+    print(f'\nElapsed time: {elapsed_time/60:.2f} minutes')
+    
+    circle_radius = 50
+    
+    fig, ax = plt.subplots(figsize=(2,2), dpi=200)
+    ax.imshow(delta_e_matrix, cmap='viridis', interpolation='none')
+    
+    max_circle = Circle(max_pos[::-1], radius=circle_radius, color='red', fill=False, linestyle='--', linewidth=1)
+    ax.add_patch(max_circle)
+    # ax.text(max_pos[1], max_pos[0], 'max', color='red', fontsize=8, ha='right', va='bottom')
+    
+    min_circle = Circle(min_pos[::-1], radius=circle_radius, color='blue', fill=False, linestyle='--', linewidth=1)
+    ax.add_patch(min_circle)
+    # ax.text(min_pos[1], min_pos[0], 'min', color='blue', fontsize=8, ha='right', va='bottom')
+    
+    ax.set_title('Delta_E')
+    plt.colorbar(ax.imshow(delta_e_matrix, cmap='viridis', interpolation='none'), ax=ax, orientation='vertical')
     plt.show()
+    
+    # plt.figure(figsize=(2,2), dpi=200)
+    # plt.imshow(delta_e_matrix, cmap='viridis')
+    # plt.colorbar()
+    # plt.title('Delta E')
+    # plt.show()
     
     
     # # directory = "test_images"
