@@ -255,7 +255,7 @@ def sigma_clipping_stack_rgb(images, sigma=3):
     
     return master_flat
 
-def capture_images(directory, num_images=10):
+def capture_images(picam, directory, num_images=10):
     """
     Capture a set number of images using Picamera2 and save them to a directory.
 
@@ -263,19 +263,19 @@ def capture_images(directory, num_images=10):
     - directory: Directory where the images will be saved.
     - num_images: Number of images to capture.
     """
-    picam2 = Picamera2()
-    picam2.configure(picam2.create_still_configuration())
-    # picam2.start_preview(QtPreview())
-    picam2.start()
-    sleep(2)  # Allow the camera to adjust
+    # picam2 = Picamera2()
+    # picam2.configure(picam2.create_still_configuration())
+    # # picam2.start_preview(QtPreview())
+    # picam2.start()
+    # sleep(2)  # Allow the camera to adjust
 
     for i in range(num_images):
         print(f'Capturing image_{i:03d}.png')
         image_path = Path(directory) / f"image_{i:03d}.png"
-        picam2.capture_file(str(image_path))
+        picam.capture_file(str(image_path))
         sleep(1)  # Small delay between captures
 
-    picam2.close()
+    picam.close()
 
 def load_images_from_directory(directory):
     """
@@ -307,6 +307,30 @@ def flat_field_correct(target_image, flat_field):
     
     return calibrated_image
     
+def stackImagesECC(file_list):
+    M = np.eye(3, 3, dtype=np.float32)
+
+    first_image = None
+    stacked_image = None
+
+    for file in file_list:
+        image = cv2.imread(file,1).astype(np.float32) / 255
+        print(file)
+        if first_image is None:
+            # convert to gray scale floating point image
+            first_image = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
+            stacked_image = image
+        else:
+            # Estimate perspective transform
+            s, M = cv2.findTransformECC(cv2.cvtColor(image,cv2.COLOR_BGR2GRAY), first_image, M, cv2.MOTION_HOMOGRAPHY)
+            w, h, _ = image.shape
+            # Align image to first image
+            image = cv2.warpPerspective(image, M, (h, w))
+            stacked_image += image
+
+    stacked_image /= len(file_list)
+    stacked_image = (stacked_image*255).astype(np.uint8)
+    return stacked_image
 
 # Once we have the standard deviation of the noise, we can estimate the likely
 # Lab color space deviation caused by noise alone. That way if we see that
@@ -315,98 +339,157 @@ def flat_field_correct(target_image, flat_field):
 
 
 if __name__ == "__main__":
-    # directory = "test_images"
+    directory = "./temp"
     
-    # picam2 = Picamera2()
-    # config = picam2.create_still_configuration(
-        # main={"size": (4056, 3040)},
-    # )
-    # picam2.configure(config)
+    picam2 = Picamera2()
+    config = picam2.create_still_configuration(
+        main={"size": (4056, 3040)},
+        )
     
-    # picam2.set_controls({
-        # "ExposureTime": 20000,
-        # "AnalogueGain": 1.0,
-        # "AwbEnable": True,
-        # "ColourGains": (1.0, 1.0, 1.0)
-    # })
+    picam2.set_controls({
+        "ExposureTime":20000, # microseconds
+        "AnalogueGain": 1.0,
+        "AwbEnable": True,
+        "ColourGains": (1.5, 1.5)
+        })
     
-    # picam2.start()
-    # image = picam2.capture_array()
-    # picam2.stop()
+    picam2.start()
     
-    # print('[INFO] Picture taken')
+    num_images = 10
+    print(f'[INFO] Capturing {num_images} images')
+    capture_images(picam2, directory, num_images=num_images)
     
-    # image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    # cv2.imwrite('test_histogram.png', image_bgr)
+    files = [file.name for file in Path(directory).iterdir() if file.is_file()]
     
-    # plt.figure(figsize=(4,4), dpi=100)
-    # plt.imshow(image)
-    # plt.colorbar()
-    # plt.title('Test')
-    # plt.show()
+    print(f'[INFO] Stacking {num_images} images')
+    stacked_image = stackImagesECC(files)
     
-    # Set reference color and compute delta E matrix
+    # Correct the image for flat field
+    print('[INFO] Calibrating for flat field')
+    flat_field = cv2.imread("./flat_field.png")
+    calibrated_image = flat_field_correct(stacked_image, flat_field)
+    lab_array = bgr_array_to_lab(calibrated_image)
+    # lab_array = bgr_array_to_lab(stacked_image)
+    
+    # Mask the image
+    print('[INFO] Masking image')
+    mask_path = "./mask.png"
+    mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+    _, binary_mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
+    mask_bool = binary_mask.astype(bool)
+    mask_3d = np.repeat(mask_bool[:, :, np.newaxis], 3, axis=2)
+    
+    masked_image = lab_array.copy()
+    masked_image[~mask_3d] = np.nan
+    
     reference_lab_color = (79.69, 1.75, 5.75)
+    print('[INFO] Calculating delta E')
+    delta_e_matrix = calculate_deltaE_lab_array(masked_image, reference_lab_color)
+    # delta_e_matrix = calculate_deltaE_lab_array(lab_array, reference_lab_color)
     
-    directory = Path('/home/rweng/Documents/GitHub/color-deviation/test_images')
+    print('\nRESULTS:')
+    print(f'Min delta E:\t{np.min(delta_e_matrix):.2f}')
+    print(f'Max delta E:\t{np.max(delta_e_matrix):.2f}')
     
-    min_deltaE = []
-    max_deltaE = []
-    median_deltaE = []
+    plt.figure(figsize=(4,4), dpi=200)
+    plt.imshow(delta_e_matrix, cmap='viridis')
+    plt.colorbar()
+    plt.title('Delta E')
+    plt.show()
     
-    files = sorted([file for file in directory.glob('*.png') if file.is_file()])
     
-    for file in files:
-        if '_deltaE' in file.stem:
-            continue
-        
-        image = cv2.imread(file)
-        
-        # Correct the image for flat field
-        flat_field = cv2.imread("/home/rweng/Documents/GitHub/color-deviation/flat_field.png")
-        calibrated_image = flat_field_correct(image, flat_field)
-        lab_array = bgr_array_to_lab(calibrated_image)
-        lab_array = bgr_array_to_lab(image)
-        
-        delta_e_matrix = calculate_deltaE_lab_array(lab_array, reference_lab_color)
-        
-        min_deltaE.append(np.min(delta_e_matrix))
-        max_deltaE.append(np.max(delta_e_matrix))
-        median_deltaE.append(np.median(delta_e_matrix))
-        
-        print(f'\n{file.name}:')
-        print(f'Min:\t{np.min(delta_e_matrix):.2f}')
-        print(f'Max:\t{np.max(delta_e_matrix):.2f}')
-        print(f'Median:\t{np.median(delta_e_matrix):.2f}')
-        
-        # Plot results (more blur = less extreme delta E)
-        # plt.figure(figsize=(4,4), dpi=200)
-        # plt.imshow(delta_e_matrix, cmap='viridis')
-        # plt.colorbar()
-        # plt.title('Base image delta E')
-        
-        # file_stem = file.stem
-        # file_extension = file.suffix
-        
-        # plot_filename = f"{file_stem}_deltaE{file_extension}"
-        
-        # plot_filepath = file.with_name(plot_filename)
-        
-        # plt.savefig(plot_filepath, format='png')
-        
-        # plt.close()
-        
-        # plt.show()
-        
-    print('#'*60)
-    print(f'Median Min:\t{np.median(min_deltaE):.2f}')
-    print(f'Std Dev Min:\t{np.std(min_deltaE):.2f}')
-    print(f'99.7% Conf Min:\t({np.median(min_deltaE)-3*np.std(min_deltaE):.2f}, {np.median(min_deltaE)+3*np.std(min_deltaE):.2f})')
+    # # directory = "test_images"
     
-    print(f'\nMedian Max:\t{np.median(max_deltaE):.2f}')
-    print(f'Std Dev Max:\t{np.std(max_deltaE):.2f}')
-    print(f'99.7% Conf Max:\t({np.median(max_deltaE)-3*np.std(max_deltaE):.2f}, {np.median(max_deltaE)+3*np.std(max_deltaE):.2f})')
+    # # picam2 = Picamera2()
+    # # config = picam2.create_still_configuration(
+    #     # main={"size": (4056, 3040)},
+    # # )
+    # # picam2.configure(config)
     
-    print(f'\nMedian Median:\t{np.median(median_deltaE):.2f}')
-    print(f'Std Dev Median:\t{np.std(median_deltaE):.2f}')
-    print(f'99.7% Conf Median:\t({np.median(median_deltaE)-3*np.std(median_deltaE):.2f}, {np.median(median_deltaE)+3*np.std(median_deltaE):.2f})')
+    # # picam2.set_controls({
+    #     # "ExposureTime": 20000,
+    #     # "AnalogueGain": 1.0,
+    #     # "AwbEnable": True,
+    #     # "ColourGains": (1.0, 1.0, 1.0)
+    # # })
+    
+    # # picam2.start()
+    # # image = picam2.capture_array()
+    # # picam2.stop()
+    
+    # # print('[INFO] Picture taken')
+    
+    # # image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    # # cv2.imwrite('test_histogram.png', image_bgr)
+    
+    # # plt.figure(figsize=(4,4), dpi=100)
+    # # plt.imshow(image)
+    # # plt.colorbar()
+    # # plt.title('Test')
+    # # plt.show()
+    
+    # # Set reference color and compute delta E matrix
+    # reference_lab_color = (79.69, 1.75, 5.75)
+    
+    # directory = Path('/home/rweng/Documents/GitHub/color-deviation/test_images')
+    
+    # min_deltaE = []
+    # max_deltaE = []
+    # median_deltaE = []
+    
+    # files = sorted([file for file in directory.glob('*.png') if file.is_file()])
+    
+    # for file in files:
+    #     if '_deltaE' in file.stem:
+    #         continue
+        
+    #     image = cv2.imread(file)
+        
+    #     # Correct the image for flat field
+    #     flat_field = cv2.imread("/home/rweng/Documents/GitHub/color-deviation/flat_field.png")
+    #     calibrated_image = flat_field_correct(image, flat_field)
+    #     lab_array = bgr_array_to_lab(calibrated_image)
+    #     lab_array = bgr_array_to_lab(image)
+        
+    #     delta_e_matrix = calculate_deltaE_lab_array(lab_array, reference_lab_color)
+        
+    #     min_deltaE.append(np.min(delta_e_matrix))
+    #     max_deltaE.append(np.max(delta_e_matrix))
+    #     median_deltaE.append(np.median(delta_e_matrix))
+        
+    #     print(f'\n{file.name}:')
+    #     print(f'Min:\t{np.min(delta_e_matrix):.2f}')
+    #     print(f'Max:\t{np.max(delta_e_matrix):.2f}')
+    #     print(f'Median:\t{np.median(delta_e_matrix):.2f}')
+        
+    #     # Plot results (more blur = less extreme delta E)
+    #     # plt.figure(figsize=(4,4), dpi=200)
+    #     # plt.imshow(delta_e_matrix, cmap='viridis')
+    #     # plt.colorbar()
+    #     # plt.title('Base image delta E')
+        
+    #     # file_stem = file.stem
+    #     # file_extension = file.suffix
+        
+    #     # plot_filename = f"{file_stem}_deltaE{file_extension}"
+        
+    #     # plot_filepath = file.with_name(plot_filename)
+        
+    #     # plt.savefig(plot_filepath, format='png')
+        
+    #     # plt.close()
+        
+    #     # plt.show()
+        
+    # print('#'*60)
+    # print(f'Median Min:\t{np.median(min_deltaE):.2f}')
+    # print(f'Std Dev Min:\t{np.std(min_deltaE):.2f}')
+    # print(f'99.7% Conf Min:\t({np.median(min_deltaE)-3*np.std(min_deltaE):.2f}, {np.median(min_deltaE)+3*np.std(min_deltaE):.2f})')
+    
+    # print(f'\nMedian Max:\t{np.median(max_deltaE):.2f}')
+    # print(f'Std Dev Max:\t{np.std(max_deltaE):.2f}')
+    # print(f'99.7% Conf Max:\t({np.median(max_deltaE)-3*np.std(max_deltaE):.2f}, {np.median(max_deltaE)+3*np.std(max_deltaE):.2f})')
+    
+    # print(f'\nMedian Median:\t{np.median(median_deltaE):.2f}')
+    # print(f'Std Dev Median:\t{np.std(median_deltaE):.2f}')
+    # print(f'99.7% Conf Median:\t({np.median(median_deltaE)-3*np.std(median_deltaE):.2f}, {np.median(median_deltaE)+3*np.std(median_deltaE):.2f})')
