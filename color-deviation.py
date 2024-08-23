@@ -315,51 +315,98 @@ def flat_field_correct(target_image, flat_field):
 
 
 if __name__ == "__main__":
-    directory = "test_images"
+    # directory = "test_images"
     
-    picam2 = Picamera2()
-    config = picam2.create_still_configuration(
-        main={"size": (4056, 3040)},
-    )
-    picam2.configure(config)
+    # picam2 = Picamera2()
+    # config = picam2.create_still_configuration(
+        # main={"size": (4056, 3040)},
+    # )
+    # picam2.configure(config)
     
-    picam2.set_controls({
-        "ExposureTime": 20000,
-        "AnalogueGain": 1.0,
-        "AwbEnable": True,
+    # picam2.set_controls({
+        # "ExposureTime": 20000,
+        # "AnalogueGain": 1.0,
+        # "AwbEnable": True,
         # "ColourGains": (1.0, 1.0, 1.0)
-    })
+    # })
     
-    picam2.start()
-    image = picam2.capture_array()
-    picam2.stop()
+    # picam2.start()
+    # image = picam2.capture_array()
+    # picam2.stop()
     
-    print('[INFO] Picture taken')
+    # print('[INFO] Picture taken')
     
-    image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    cv2.imwrite('test_histogram.png', image_bgr)
+    # image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    # cv2.imwrite('test_histogram.png', image_bgr)
     
-    plt.figure(figsize=(4,4), dpi=100)
-    plt.imshow(image)
-    plt.colorbar()
-    plt.title('Test')
-    plt.show()
+    # plt.figure(figsize=(4,4), dpi=100)
+    # plt.imshow(image)
+    # plt.colorbar()
+    # plt.title('Test')
+    # plt.show()
     
     # Set reference color and compute delta E matrix
     reference_lab_color = (79.69, 1.75, 5.75)
     
-    # Correct the image for flat field
-    flat_field = cv2.imread("/home/rweng/Documents/GitHub/color-deviation/flat_field.png")
-    calibrated_image = flat_field_correct(image, flat_field)
-    lab_array = bgr_array_to_lab(calibrated_image)
-    lab_array = bgr_array_to_lab(image)
+    directory = Path('/home/rweng/Documents/GitHub/color-deviation/test_images')
     
-    delta_e_matrix = calculate_deltaE_lab_array(lab_array, reference_lab_color)
+    min_deltaE = []
+    max_deltaE = []
+    median_deltaE = []
     
-    # Plot results (more blur = less extreme delta E)
-    plt.figure(figsize=(4,4), dpi=100)
-    plt.imshow(delta_e_matrix, cmap='viridis')
-    plt.colorbar()
-    plt.title('Base image delta E')
+    files = sorted([file for file in directory.glob('*.png') if file.is_file()])
     
-    plt.show()
+    for file in files:
+        if '_deltaE' in file.stem:
+            continue
+        
+        image = cv2.imread(file)
+        
+        # Correct the image for flat field
+        flat_field = cv2.imread("/home/rweng/Documents/GitHub/color-deviation/flat_field.png")
+        calibrated_image = flat_field_correct(image, flat_field)
+        lab_array = bgr_array_to_lab(calibrated_image)
+        lab_array = bgr_array_to_lab(image)
+        
+        delta_e_matrix = calculate_deltaE_lab_array(lab_array, reference_lab_color)
+        
+        min_deltaE.append(np.min(delta_e_matrix))
+        max_deltaE.append(np.max(delta_e_matrix))
+        median_deltaE.append(np.median(delta_e_matrix))
+        
+        print(f'\n{file.name}:')
+        print(f'Min:\t{np.min(delta_e_matrix):.2f}')
+        print(f'Max:\t{np.max(delta_e_matrix):.2f}')
+        print(f'Median:\t{np.median(delta_e_matrix):.2f}')
+        
+        # Plot results (more blur = less extreme delta E)
+        # plt.figure(figsize=(4,4), dpi=200)
+        # plt.imshow(delta_e_matrix, cmap='viridis')
+        # plt.colorbar()
+        # plt.title('Base image delta E')
+        
+        # file_stem = file.stem
+        # file_extension = file.suffix
+        
+        # plot_filename = f"{file_stem}_deltaE{file_extension}"
+        
+        # plot_filepath = file.with_name(plot_filename)
+        
+        # plt.savefig(plot_filepath, format='png')
+        
+        # plt.close()
+        
+        # plt.show()
+        
+    print('#'*60)
+    print(f'Median Min:\t{np.median(min_deltaE):.2f}')
+    print(f'Std Dev Min:\t{np.std(min_deltaE):.2f}')
+    print(f'99.7% Conf Min:\t({np.median(min_deltaE)-3*np.std(min_deltaE):.2f}, {np.median(min_deltaE)+3*np.std(min_deltaE):.2f})')
+    
+    print(f'\nMedian Max:\t{np.median(max_deltaE):.2f}')
+    print(f'Std Dev Max:\t{np.std(max_deltaE):.2f}')
+    print(f'99.7% Conf Max:\t({np.median(max_deltaE)-3*np.std(max_deltaE):.2f}, {np.median(max_deltaE)+3*np.std(max_deltaE):.2f})')
+    
+    print(f'\nMedian Median:\t{np.median(median_deltaE):.2f}')
+    print(f'Std Dev Median:\t{np.std(median_deltaE):.2f}')
+    print(f'99.7% Conf Median:\t({np.median(median_deltaE)-3*np.std(median_deltaE):.2f}, {np.median(median_deltaE)+3*np.std(median_deltaE):.2f})')
