@@ -106,6 +106,8 @@ def on_take_picture():
 root = tk.Tk()
 root.title("QC Image Annotation")
 
+root.minsize(600,450)
+
 # Dropdown menu for annotations
 annotation_var = tk.StringVar(value=annotations[0])
 annotation_menu = ttk.Combobox(root, textvariable=annotation_var, values=annotations, state="readonly")
