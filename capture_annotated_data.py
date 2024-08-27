@@ -6,15 +6,12 @@ from PIL import Image, ImageTk
 
 # List of classification annotations
 annotations = [
-    "6024 PASS", "6024 FAIL", "6038 PASS", "6038 FAIL",
-    "7024 PASS", "7024 FAIL", "7038 PASS", "7038 FAIL"
+    "6024_PASS", "6038_PASS", "7024_PASS", "7038_PASS",
+    "6024_FAIL", "6038_FAIL", "7024_FAIL", "7038_FAIL"
 ]
 
 # Directory to save images
 output_dir = "annotated_images"
-
-# Create the output directory if it doesn't exist
-os.makedirs(output_dir, exist_ok=True)
 
 # Create the output directory if it doesn't exist
 os.makedirs(output_dir, exist_ok=True)
