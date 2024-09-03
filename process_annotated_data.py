@@ -13,31 +13,9 @@ from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
 import numpy as np
 from skimage.color import deltaE_cie76
-
-# def rgb_to_lab(rgb):
-#     rgb_color = sRGBColor(rgb[0], rgb[1], rgb[2])
-#     lab_color = convert_color(rgb_color, LabColor)
-#     return lab_color.lab_l, lab_color.lab_a, lab_color.lab_b
-
-# # Vectorize the function
-# vectorized_rgb_to_lab = np.vectorize(rgb_to_lab, signature='(n)->(m)')
-
-# # Now, if you want to convert back to RGB
-# def lab_to_rgb(lab):
-#     lab_color = LabColor(lab[0], lab[1], lab[2])
-#     rgb_color = convert_color(lab_color, sRGBColor)
-#     return rgb_color.clamped_rgb_r, rgb_color.clamped_rgb_g, rgb_color.clamped_rgb_b
-
-# # Vectorize the function
-# vectorized_lab_to_rgb = np.vectorize(lab_to_rgb, signature='(n)->(m)')
-
-# def compute_delta_e_vectorized(lab_array, reference_lab):
-#     delta_e_values = np.zeros(lab_array.shape[0])
-    
-#     for i, lab in enumerate(lab_array):
-#         delta_e_values[i] = delta_e_cie1976(LabColor(*lab), reference_lab)
-    
-#     return delta_e_values
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+import matplotlib.pyplot as plt
 
 def calculate_deltaE_lab_array(lab_array, reference_lab_color):
     # lab_array should have the shape (height, width, 3)
@@ -65,19 +43,35 @@ def process_file(file_path):
     img = cv2.imread(file_path)
     img_float = img.astype(np.float32) / 255.0
     img_lab = cv2.cvtColor(img_float, cv2.COLOR_BGR2Lab)
-    # img_lab = np.empty(img.shape)
-    # print(f'Processing {file_path}')
-    # for i in range(img.shape[0]):
-    #     for j in range(img.shape[1]):
-    #         b = img[i][j][0] / 255
-    #         g = img[i][j][1] / 255
-    #         r = img[i][j][2] / 255
-    #         rgb = (r, g, b)
-    #         img_lab[i][j][0], img_lab[i][j][1], img_lab[i][j][2], = rgb_to_lab(rgb)
             
     # lab_array = vectorized_rgb_to_lab(img)
     ref_lab = (79.69, 1.75, 5.75)
     delta_e_array = calculate_deltaE_lab_array(img_lab, ref_lab)
+    
+    # # K-means clustering to separate color areas and estimate area of deviation
+    # range_n_clusters = list(range(1, 11))
+    # flattened_delta_e = delta_e_array.reshape(-1, 1)
+    
+    # inertia = []
+    
+    # for n_clusters in range_n_clusters:
+    #     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    #     kmeans.fit(flattened_delta_e)
+        
+    #     inertia.append(kmeans.inertia_)
+    #     # silhouette_avg = silhouette_score(flattened_delta_e, kmeans.labels_)
+    #     # silhouette_scores.append(silhouette_avg)
+        
+    #     clustered_image = kmeans.labels_.reshape(delta_e_array.shape)
+    #     cluster_means = kmeans.cluster_centers_
+    
+    # plt.figure(figsize=(8,6), dpi=300)
+    # plt.plot(range_n_clusters, inertia, 'bx-')
+    # plt.xlabel('Number of clusters')
+    # plt.ylabel('Inertia')
+    # plt.title(f'{os.path.basename(file_path)}')
+    # plt.show()
+    
     print(f'{os.path.basename(file_path)}\t{np.min(delta_e_array)}')
     return (np.min(delta_e_array), np.max(delta_e_array), np.median(delta_e_array))
 
