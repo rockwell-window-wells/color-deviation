@@ -3,6 +3,8 @@ import os
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
+from pypylon import pylon
+import numpy as np
 
 # List of classification annotations
 annotations = [
@@ -19,8 +21,21 @@ os.makedirs(output_dir, exist_ok=True)
 # Initialize image counter
 image_counter = 0
 
+def initialize_camera():
+    try:
+        # Create an instant camera object with the camera device found by Pylon
+        tlf = pylon.TlFactory.GetInstance()
+        camera = pylon.InstantCamera(tlf.CreateFirstDevice())
+        camera.Open()
+        return camera
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+    
+camera = initialize_camera()
+
 # Open the camera once and keep it open
-cap = cv2.VideoCapture(0)
+#cap = cv2.VideoCapture(0)
 
 # Initialize image counter based on existing images
 def initialize_image_counter():
@@ -52,17 +67,41 @@ def get_next_image_filename(annotation):
     return image_filename
 
 def capture_image():
-    if not cap.isOpened():
-        print("Error: Could not open camera.")
+    if not camera:
+        print("Error: Camera not initialized.")
         return None
     
-    ret, frame = cap.read()
+    try:
+        # Start grabbing images
+        camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+        grab_result = camera.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
+        
+        if grab_result.GrabSucceeded():
+            # Convert image to numpy array
+            img = grab_result.Array
+            img = cv2.cvtColor(img, cv2.COLOR_BAYER_RG2BGR)
+            grab_result.Release()
+            return img
+        else:
+            print("Error: Could not grab image.")
+            grab_result.Release()
+            return None
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
 
-    if not ret:
-        print("Error: Could not capture image.")
-        return None
-    
-    return frame
+#def capture_image():
+#    if not cap.isOpened():
+#        print("Error: Could not open camera.")
+#        return None
+#    
+#    ret, frame = cap.read()
+#
+#    if not ret:
+#        print("Error: Could not capture image.")
+#        return None
+#    
+#    return frame
 
 def save_image_with_annotation(image, annotation):
     annotation_dir = os.path.join(output_dir, annotation)
@@ -122,4 +161,7 @@ display_label.pack(pady=10)
 root.mainloop()
 
 # Release the camera when the application is closed
-cap.release()
+#cap.release()
+if camera:
+    camera.StopGrabbing()
+    camera.Close()
