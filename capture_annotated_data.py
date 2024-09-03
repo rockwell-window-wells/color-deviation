@@ -1,3 +1,4 @@
+#!/home/rwengineering/Documents/GitHub/color-deviation/venv/bin/python3
 import cv2
 import os
 import tkinter as tk
@@ -5,6 +6,7 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 from pypylon import pylon
 import numpy as np
+from process_annotated_data import process_main_directory
 
 # List of classification annotations
 annotations = [
@@ -27,15 +29,31 @@ def initialize_camera():
         tlf = pylon.TlFactory.GetInstance()
         camera = pylon.InstantCamera(tlf.CreateFirstDevice())
         camera.Open()
+        
+        configure_camera(camera)
+        
         return camera
     except Exception as e:
         print(f"Error: {e}")
         return None
-    
-camera = initialize_camera()
 
-# Open the camera once and keep it open
-#cap = cv2.VideoCapture(0)
+def configure_camera(camera):
+    try:
+        camera.GainAuto.SetValue("Off")
+        camera.ExposureAuto.SetValue("Off")
+        camera.ExposureTime.SetValue(20000)     # Exposure time in microseconds
+        
+        camera.BalanceWhiteAuto.SetValue("Off")
+        camera.BalanceWhiteRed.SetValue(1.0)
+        camera.BalanceWhiteGreen.SetValue(1.0)
+        camera.BalanceWhiteBlue.SetValue(1.0)
+        
+    except Exception as e:
+        print(f"Error configuring exposure: {e}")
+        
+        
+
+camera = initialize_camera()
 
 # Initialize image counter based on existing images
 def initialize_image_counter():
@@ -91,19 +109,6 @@ def capture_image():
         return None
     finally:
         camera.StopGrabbing()
-
-#def capture_image():
-#    if not cap.isOpened():
-#        print("Error: Could not open camera.")
-#        return None
-#    
-#    ret, frame = cap.read()
-#
-#    if not ret:
-#        print("Error: Could not capture image.")
-#        return None
-#    
-#    return frame
 
 def save_image_with_annotation(image, annotation):
     annotation_dir = os.path.join(output_dir, annotation)
@@ -167,3 +172,6 @@ root.mainloop()
 if camera:
     camera.StopGrabbing()
     camera.Close()
+    
+main_directory = "annotated_images"
+process_main_directory(main_directory)
