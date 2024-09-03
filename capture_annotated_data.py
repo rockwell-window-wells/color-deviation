@@ -79,22 +79,7 @@ def capture_image():
         if grab_result.GrabSucceeded():
             # Convert image to numpy array
             img = grab_result.Array
-            
-            # # Check the format of the image
-            # img_format = grab_result.GetPixelType()
-            
-            # # Example for handling different formats:
-            # if img_format == pylon.PixelType_Mono8:
-            #     print("Detected grayscale format.")
-            #     # Image is already in grayscale, no conversion needed
-            # elif img_format == pylon.PixelType_RGB8packed:
-            #     print("Detected RGB format.")
-            #     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)  # Convert RGB to BGR for OpenCV
-            # elif img_format == pylon.PixelType_BayerRG8:
-            #     print("Detected Bayer format.")
-            #     img = cv2.cvtColor(img, cv2.COLOR_BayerRG2BGR)  # Convert Bayer to BGR
-            
-            img = cv2.cvtColor(img, cv2.COLOR_BayerRG2RGB)
+            img = cv2.cvtColor(img, cv2.COLOR_BAYER_RG2BGR)
             grab_result.Release()
             return img
         else:
@@ -104,9 +89,6 @@ def capture_image():
     except Exception as e:
         print(f"Error: {e}")
         return None
-    finally:
-        # Ensure that grabbing is stopped after image capture
-        camera.StopGrabbing()
 
 #def capture_image():
 #    if not cap.isOpened():
@@ -135,7 +117,7 @@ def save_image_with_annotation(image, annotation):
 
 def update_display(image_filename):
     img = Image.open(image_filename)
-    img = img.resize((500, 300))  # Resize for display
+    img = img.resize((400, 300))  # Resize for display
     img_tk = ImageTk.PhotoImage(img)
     
     display_label.img_tk = img_tk  # Keep a reference to avoid garbage collection
