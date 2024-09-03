@@ -79,7 +79,7 @@ def capture_image():
         if grab_result.GrabSucceeded():
             # Convert image to numpy array
             img = grab_result.Array
-            img = cv2.cvtColor(img, cv2.COLOR_BAYER_RG2BGR)
+            img = cv2.cvtColor(img, cv2.COLOR_BayerRG2RGB)
             grab_result.Release()
             return img
         else:
@@ -89,6 +89,8 @@ def capture_image():
     except Exception as e:
         print(f"Error: {e}")
         return None
+    finally:
+        camera.StopGrabbing()
 
 #def capture_image():
 #    if not cap.isOpened():
@@ -117,7 +119,7 @@ def save_image_with_annotation(image, annotation):
 
 def update_display(image_filename):
     img = Image.open(image_filename)
-    img = img.resize((400, 300))  # Resize for display
+    img = img.resize((500, 300))  # Resize for display
     img_tk = ImageTk.PhotoImage(img)
     
     display_label.img_tk = img_tk  # Keep a reference to avoid garbage collection

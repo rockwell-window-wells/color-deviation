@@ -4,3 +4,4 @@
 model.pth
 /test_training
 fasterrcnn_model.pth
+/annotated_images
