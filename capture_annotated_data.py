@@ -39,8 +39,8 @@ def initialize_camera():
 
 def configure_camera(camera):
     try:
-        camera.GainAuto.SetValue("Off")
-        camera.ExposureAuto.SetValue("Off")
+        camera.GainAuto.SetValue("On")
+        camera.ExposureAuto.SetValue("On")
         camera.ExposureTime.SetValue(20000)     # Exposure time in microseconds
         
         camera.BalanceWhiteAuto.SetValue("Off")
@@ -129,6 +129,14 @@ def update_display(image_filename):
     
     display_label.img_tk = img_tk  # Keep a reference to avoid garbage collection
     display_label.config(image=img_tk)
+    
+def show_success_message(image_filename):
+    image_name = os.path.basename(image_filename)
+    success_message.config(text=f"{image_name} has been taken")
+    root.after(10000, clear_success_message)  # Clear the message after 10 seconds
+
+def clear_success_message():
+    success_message.config(text="")
 
 def on_take_picture():
     # Capture image
@@ -144,25 +152,34 @@ def on_take_picture():
     
     # Update display
     update_display(image_filename)
+    
+    # Show success message
+    show_success_message(image_filename)
 
 # Tkinter GUI setup
 root = tk.Tk()
 root.title("QC Image Annotation")
 
-root.minsize(600,450)
+root.attributes("-topmost", True)
+root.state('zoomed')
+# root.minsize(600,450)
 
 # Dropdown menu for annotations
 annotation_var = tk.StringVar(value=annotations[0])
-annotation_menu = ttk.Combobox(root, textvariable=annotation_var, values=annotations, state="readonly")
+annotation_menu = ttk.Combobox(root, textvariable=annotation_var, values=annotations, state="readonly", font=("Arial", 14), width=25)
 annotation_menu.pack(pady=10)
 
 # Take Picture button
-take_picture_button = tk.Button(root, text="Take Picture", command=on_take_picture)
+take_picture_button = tk.Button(root, text="Take Picture", command=on_take_picture, font=("Arial", 16), width=15, height=2)
 take_picture_button.pack(pady=10)
 
 # Display area for the captured image
 display_label = tk.Label(root)
 display_label.pack(pady=10)
+
+# Label to show success message
+success_message = tk.Label(root, text="", font=("Arial", 12), fg="green")
+success_message.pack(pady=10)
 
 # Run the GUI loop
 root.mainloop()
