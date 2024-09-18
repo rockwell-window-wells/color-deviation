@@ -30,16 +30,26 @@ def initialize_camera():
         camera = pylon.InstantCamera(tlf.CreateFirstDevice())
         camera.Open()
         
+        print_available_values(camera, "GainAuto")
+        print_available_values(camera, "ExposureAuto")
+        
         configure_camera(camera)
         
         return camera
     except Exception as e:
         print(f"Error: {e}")
         return None
+    
+def print_available_values(camera, feature_name):
+    try:
+        node = getattr(camera, feature_name)
+        available_values = node.Symbolics
+        print(f"Available values for {feature_name}: {available_values}")
+    except Exception as e:
+        print(f"Error querying {feature_name}: {e}")
 
 def configure_camera(camera):
     try:
-        
         camera.GainAuto.Value = "On"
         camera.ExposureAuto.Value = "On"
         camera.ExposureTime.Value = 20000   # Exposure time in microseconds
