@@ -39,14 +39,25 @@ def initialize_camera():
 
 def configure_camera(camera):
     try:
-        # camera.GainAuto.SetValue("On")
-        camera.ExposureAuto.SetValue("On")
-        camera.ExposureTime.SetValue(20000)     # Exposure time in microseconds
         
-        camera.BalanceWhiteAuto.SetValue("Off")
-        camera.BalanceWhiteRed.SetValue(1.0)
-        camera.BalanceWhiteGreen.SetValue(1.0)
-        camera.BalanceWhiteBlue.SetValue(1.0)
+        camera.GainAuto.Value = "On"
+        camera.ExposureAuto.Value = "On"
+        camera.ExposureTime.Value = 20000   # Exposure time in microseconds
+        
+        camera.BalanceWhiteAuto.Value = "Off"
+        camera.BalanceWhiteRed.Value = 1.0
+        camera.BalanceWhiteGreen.Value = 1.0
+        camera.BalanceWhiteBlue.Value = 1.0
+        
+        
+        # camera.GainAuto.SetValue("On")
+        # camera.ExposureAuto.SetValue("On")
+        # camera.ExposureTime.SetValue(20000)     # Exposure time in microseconds
+        
+        # camera.BalanceWhiteAuto.SetValue("Off")
+        # camera.BalanceWhiteRed.SetValue(1.0)
+        # camera.BalanceWhiteGreen.SetValue(1.0)
+        # camera.BalanceWhiteBlue.SetValue(1.0)
         
     except Exception as e:
         print(f"Error configuring exposure: {e}")
