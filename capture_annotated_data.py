@@ -39,7 +39,7 @@ def initialize_camera():
 
 def configure_camera(camera):
     try:
-        camera.GainAuto.SetValue("On")
+        # camera.GainAuto.SetValue("On")
         camera.ExposureAuto.SetValue("On")
         camera.ExposureTime.SetValue(20000)     # Exposure time in microseconds
         
