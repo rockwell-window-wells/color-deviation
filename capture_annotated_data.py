@@ -22,6 +22,7 @@ os.makedirs(output_dir, exist_ok=True)
 
 # Initialize image counter
 image_counter = 0
+last_image_filename = None  # Store the last image filename globally
 
 def initialize_camera():
     try:
@@ -59,10 +60,10 @@ def configure_camera(camera):
         # camera.BalanceWhiteGreen.Value = 1.0
         # camera.BalanceWhiteBlue.Value = 1.0
         
-        
-        camera.GainAuto.SetValue("Continuous")
+        camera.GainAuto.SetValue("Off")
+        camera.Gain.SetValue(0.0)
         camera.ExposureAuto.SetValue("Continuous")
-        camera.ExposureTime.SetValue(20000)     # Exposure time in microseconds
+        camera.ExposureTime.SetValue(10000)     # Exposure time in microseconds
         
         camera.BalanceWhiteAuto.SetValue("Off")
         camera.BalanceWhiteRed.SetValue(1.0)
@@ -71,12 +72,9 @@ def configure_camera(camera):
         
     except Exception as e:
         print(f"Error configuring exposure: {e}")
-        
-        
 
 camera = initialize_camera()
 
-# Initialize image counter based on existing images
 def initialize_image_counter():
     max_number = 0
     for annotation in annotations:
@@ -132,6 +130,7 @@ def capture_image():
         camera.StopGrabbing()
 
 def save_image_with_annotation(image, annotation):
+    global last_image_filename
     annotation_dir = os.path.join(output_dir, annotation)
     os.makedirs(annotation_dir, exist_ok=True)
     
@@ -141,6 +140,7 @@ def save_image_with_annotation(image, annotation):
     cv2.imwrite(image_filename, image)
     print(f"Image saved as {image_filename}")
 
+    last_image_filename = image_filename  # Store the last image filename
     return image_filename
 
 def update_display(image_filename):
@@ -150,11 +150,19 @@ def update_display(image_filename):
     
     display_label.img_tk = img_tk  # Keep a reference to avoid garbage collection
     display_label.config(image=img_tk)
-    
+
+def clear_display():
+    display_label.config(image='')
+
 def show_success_message(image_filename):
     image_name = os.path.basename(image_filename)
     success_message.config(text=f"{image_name} has been taken")
     root.after(10000, clear_success_message)  # Clear the message after 10 seconds
+
+def show_delete_message(image_filename):
+    image_name = os.path.basename(image_filename)
+    success_message.config(text=f"{image_name} has been deleted")
+    root.after(5000, clear_success_message)  # Clear the message after 5 seconds
 
 def clear_success_message():
     success_message.config(text="")
@@ -177,6 +185,19 @@ def on_take_picture():
     # Show success message
     show_success_message(image_filename)
 
+def on_reject_picture():
+    global last_image_filename
+    
+    if last_image_filename:
+        try:
+            os.remove(last_image_filename)
+            print(f"Deleted {last_image_filename}")
+            show_delete_message(last_image_filename)
+            clear_display()
+            last_image_filename = None
+        except Exception as e:
+            print(f"Error deleting image: {e}")
+
 # Tkinter GUI setup
 root = tk.Tk()
 root.title("QC Image Annotation")
@@ -194,11 +215,15 @@ annotation_menu.pack(pady=10)
 take_picture_button = tk.Button(root, text="Take Picture", command=on_take_picture, font=("Arial", 16), width=15, height=2)
 take_picture_button.pack(pady=10)
 
+# Reject Picture button
+reject_picture_button = tk.Button(root, text="Reject Picture", command=on_reject_picture, font=("Arial", 16), width=15, height=2)
+reject_picture_button.pack(pady=10)
+
 # Display area for the captured image
 display_label = tk.Label(root)
 display_label.pack(pady=10)
 
-# Label to show success message
+# Label to show success or delete message
 success_message = tk.Label(root, text="", font=("Arial", 12), fg="green")
 success_message.pack(pady=10)
 
@@ -206,10 +231,9 @@ success_message.pack(pady=10)
 root.mainloop()
 
 # Release the camera when the application is closed
-#cap.release()
 if camera:
     camera.StopGrabbing()
     camera.Close()
-    
+
 main_directory = "annotated_images"
 process_main_directory(main_directory)
