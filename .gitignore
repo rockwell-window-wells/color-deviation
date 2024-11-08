@@ -6,3 +6,5 @@ model.pth
 fasterrcnn_model.pth
 /annotated_images
 *.pyc
+*.jpg
+*.png
