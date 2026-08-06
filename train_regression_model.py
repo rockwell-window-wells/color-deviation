@@ -33,8 +33,9 @@ class ImageDataset(Dataset):
         
         # Convert targets to tensor
         # targets = self.dataframe.iloc[idx, 1:].values.astype(float)
-        selected_cols = ["Thermal Shock Avg Delta E"]
+        # selected_cols = ["% pixels in thermal shock"]
         # selected_cols = ["Base Color Avg Delta E", "Thermal Shock Avg Delta E", "% pixels in thermal shock"]
+        selected_cols = ["Max Delta E - Base to Shock"]
         targets = self.dataframe.loc[idx, selected_cols].values.astype(float)
         targets = torch.tensor(targets, dtype=torch.float32)
         
@@ -108,7 +109,7 @@ def main():
 
     # Parameters
     num_outputs = 1  # Number of target variables (delta_E and pct_coverage)
-    num_epochs = 30
+    num_epochs = 40
     batch_size = 32
     learning_rate = 0.001
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
