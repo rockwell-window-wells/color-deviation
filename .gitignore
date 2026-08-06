@@ -8,3 +8,10 @@ fasterrcnn_model.pth
 *.pyc
 *.jpg
 *.png
+clahe_for_labeling/image_00069.json
+clahe_for_labeling/image_00070.json
+Denali Color Checking - Processed.xlsx
+Denali Color Checking.xlsx
+Denali_Color_Data.csv
+image_00042_repeatability_test.xcf
+image_index.csv
